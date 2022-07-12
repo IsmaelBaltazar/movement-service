@@ -1,5 +1,6 @@
 package com.nttdata.movement.service;
 
+import com.nttdata.movement.integration.account.model.entity.Account;
 import com.nttdata.movement.integration.account.model.service.AccountService;
 import com.nttdata.movement.model.document.Movement;
 import com.nttdata.movement.model.repository.MovementRepository;
@@ -20,7 +21,8 @@ public class MovementServiceImpl implements MovementService {
     private SequenceGeneratorService sequenceGeneratorService;
     @Autowired
     private AccountService accountService;
-
+    @Autowired
+    private MovementEventsService  movementEventsService;
     @Override
     public Flux<Movement> getAll() {
         return movementRepository.findAll();
@@ -28,15 +30,15 @@ public class MovementServiceImpl implements MovementService {
 
     @Override
     public Mono<Movement> save(Movement movement) {
+
         return accountService.getAccount(movement.getIdAccount()).flatMap(account->{
             if (account.getAmount()<=0){
                 return Mono.just(new Movement());
             }
             account.setAmount(account.getAmount()+movement.getAmount());
-            log.info("account:"+account);
             accountService.updateAccount(account).subscribe();
-            log.info("amount updated:"+account.getAmount());
             movement.setIdMovement(sequenceGeneratorService.getSequenceNumber(Movement.SEQUENCE_NAME));
+            movementEventsService.publish(movement);
             return movementRepository.save(movement);
         });
     }
